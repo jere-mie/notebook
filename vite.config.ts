@@ -48,9 +48,14 @@ export default defineConfig({
           },
         ],
       },
+      devOptions: {
+        // Enable the service worker during `npm run dev` so the PWA install
+        // prompt appears on localhost without needing a production build.
+        enabled: true,
+      },
       workbox: {
-        // No precaching — we don't want to serve anything cache-first from the app shell.
-        // Vite already content-hashes JS/CSS filenames, so the real staleness risk is index.html.
+        // No precaching — don't serve anything cache-first from the app shell.
+        // Vite content-hashes JS/CSS filenames; real staleness risk is index.html.
         globPatterns: [],
         // Disable vite-plugin-pwa's auto-injected NavigationRoute (which tries to serve
         // index.html from precache — broken since we have no precache). The NetworkFirst
