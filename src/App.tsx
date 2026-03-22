@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Note, Theme } from './types';
 import Sidebar from './components/Sidebar';
 import Editor from './components/Editor';
@@ -115,6 +115,32 @@ export default function App() {
 
   // Active note: either the unsaved draft or a persisted note
   const activeNote = (draft && draft.id === selectedId) ? draft : savedNote;
+
+  // Ctrl+Up / Ctrl+Down to navigate between notes
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (!e.ctrlKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    // Build the navigable list: draft (if unsaved) prepended to filtered saved notes
+    const navList = [
+      ...(draft ? [draft] : []),
+      ...filteredNotes.filter((n) => !draft || n.id !== draft.id),
+    ];
+    if (navList.length < 2) return;
+    const currentIdx = navList.findIndex((n) => n.id === selectedId);
+    if (currentIdx === -1) return;
+    e.preventDefault();
+    const nextIdx =
+      e.key === 'ArrowDown'
+        ? Math.min(currentIdx + 1, navList.length - 1)
+        : Math.max(currentIdx - 1, 0);
+    if (nextIdx !== currentIdx) {
+      selectNote(navList[nextIdx].id);
+    }
+  }, [draft, filteredNotes, selectedId, selectNote]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   return (
     <div className={`nb-shell${sidebarVisible ? '' : ' nb-sidebar-collapsed'}`}>
