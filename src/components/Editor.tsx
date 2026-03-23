@@ -14,6 +14,7 @@ function toMonacoLang(lang: string): string {
 
 interface EditorProps {
   note: Note | null;
+  focusRequestKey: number;
   theme: Theme;
   sidebarVisible: boolean;
   onUpdate: (id: string, updates: Partial<Note>) => void;
@@ -41,14 +42,21 @@ function EmptyState() {
   );
 }
 
-export default function Editor({ note, theme, sidebarVisible, onUpdate, onDelete, onBack, onToggleSidebar, onNavNote }: EditorProps) {
+export default function Editor({ note, focusRequestKey, theme, sidebarVisible, onUpdate, onDelete, onBack, onToggleSidebar, onNavNote }: EditorProps) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const monacoEditorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Always-current ref so Monaco's onMount closure never goes stale
   const onNavNoteRef = useRef(onNavNote);
   useEffect(() => { onNavNoteRef.current = onNavNote; }, [onNavNote]);
+
+  useEffect(() => {
+    return () => {
+      if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current);
+    };
+  }, []);
 
   const handleMonacoMount: OnMount = (editor, monaco) => {
     monacoEditorRef.current = editor;
@@ -73,18 +81,25 @@ export default function Editor({ note, theme, sidebarVisible, onUpdate, onDelete
     });
   };
 
-  // Reset per-note UI state
-  useEffect(() => {
-    setDeleteConfirm(false);
-    if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current);
-  }, [note?.id]);
-
   // Auto-focus empty title
   useEffect(() => {
     if (note && !note.title && titleRef.current) {
       titleRef.current.focus();
     }
   }, [note?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!note || focusRequestKey === 0) return;
+
+    if (note.isCode) {
+      requestAnimationFrame(() => {
+        monacoEditorRef.current?.focus();
+      });
+      return;
+    }
+
+    textAreaRef.current?.focus();
+  }, [focusRequestKey, note]);
 
   if (!note) return <EmptyState />;
 
@@ -255,6 +270,7 @@ export default function Editor({ note, theme, sidebarVisible, onUpdate, onDelete
             aria-label="Note title"
           />
           <textarea
+            ref={textAreaRef}
             className="nb-text-area"
             placeholder="Start writing..."
             value={note.content}

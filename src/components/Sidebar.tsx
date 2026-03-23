@@ -1,4 +1,4 @@
-import { useState, useRef, Fragment } from 'react';
+import { useState, useRef, Fragment, useEffect } from 'react';
 import type { Note, Folder, SidebarItem, Theme } from '../types';
 
 interface SidebarProps {
@@ -7,6 +7,9 @@ interface SidebarProps {
   folders: Folder[];
   sidebarOrder: SidebarItem[];
   folderContents: Record<string, string[]>;
+  openFolders: string[];
+  searchFocusKey: number;
+  onOpenFromSearch: (id: string) => void;
   selectedId: string | null;
   query: string;
   theme: Theme;
@@ -21,6 +24,7 @@ interface SidebarProps {
   onMoveNoteToFolder: (noteId: string, folderId: string | null, insertAt?: number) => void;
   onReorderSidebar: (order: SidebarItem[]) => void;
   onReorderFolder: (folderId: string, noteIds: string[]) => void;
+  onOpenFoldersChange: (folderIds: string[]) => void;
   onExport: () => void;
   onImport: (file: File) => void;
   onToggleTheme: () => void;
@@ -70,6 +74,9 @@ export default function Sidebar({
   folders,
   sidebarOrder,
   folderContents,
+  openFolders,
+  searchFocusKey,
+  onOpenFromSearch,
   selectedId,
   query,
   theme,
@@ -84,14 +91,16 @@ export default function Sidebar({
   onMoveNoteToFolder,
   onReorderSidebar,
   onReorderFolder,
+  onOpenFoldersChange,
   onExport,
   onImport,
   onToggleTheme,
 }: SidebarProps) {
   const importInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const noteCardRefs = useRef(new Map<string, HTMLDivElement>());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [openFolders, setOpenFolders] = useState<Set<string>>(new Set());
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renamingValue, setRenamingValue] = useState('');
   const [addingFolder, setAddingFolder] = useState(false);
@@ -100,6 +109,12 @@ export default function Sidebar({
   const deleteFolderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dragSource, setDragSource] = useState<DragSource | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const openFolderSet = new Set(openFolders);
+
+  const updateOpenFolders = (updater: (previous: Set<string>) => Set<string>) => {
+    const next = updater(new Set(openFolders));
+    onOpenFoldersChange([...next]);
+  };
 
   // Build full note map including draft
   const allNotes = new Map<string, Note>();
@@ -111,6 +126,31 @@ export default function Sidebar({
     if (!q) return true;
     return note.title.toLowerCase().includes(q) || note.content.toLowerCase().includes(q);
   };
+
+  const orderedMatchingNoteIds = sidebarOrder.flatMap((item) => {
+    if (item.type === 'note') {
+      const note = allNotes.get(item.id);
+      return note && matchesQuery(note) ? [note.id] : [];
+    }
+
+    return (folderContents[item.id] ?? []).filter((noteId) => {
+      const note = allNotes.get(noteId);
+      return !!note && matchesQuery(note);
+    });
+  });
+
+  useEffect(() => {
+    if (searchFocusKey === 0) return;
+    searchInputRef.current?.focus();
+    searchInputRef.current?.select();
+  }, [searchFocusKey]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const selectedCard = noteCardRefs.current.get(selectedId);
+    if (!selectedCard) return;
+    selectedCard.scrollIntoView({ block: 'nearest' });
+  }, [selectedId, openFolders, query, sidebarOrder, folderContents]);
 
   const handleCardDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -193,7 +233,7 @@ export default function Sidebar({
       const item = sidebarOrder[dragSource.index];
       if (item?.type === 'note') {
         onMoveNoteToFolder(item.id, folderId);
-        setOpenFolders((prev) => new Set([...prev, folderId]));
+        updateOpenFolders((prev) => new Set([...prev, folderId]));
       }
     } else if (dragSource.kind === 'folder-note') {
       const srcFolderId = dragSource.folderId;
@@ -208,7 +248,7 @@ export default function Sidebar({
         onReorderFolder(folderId, contents);
       } else {
         onMoveNoteToFolder(noteId, folderId);
-        setOpenFolders((prev) => new Set([...prev, folderId]));
+        updateOpenFolders((prev) => new Set([...prev, folderId]));
       }
     }
 
@@ -229,6 +269,10 @@ export default function Sidebar({
     const isConfirm = deleteConfirmId === note.id;
     return (
       <div
+        ref={(element) => {
+          if (element) noteCardRefs.current.set(note.id, element);
+          else noteCardRefs.current.delete(note.id);
+        }}
         draggable
         onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, dragSrc); }}
         onDragEnd={handleDragEnd}
@@ -331,11 +375,19 @@ export default function Sidebar({
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input
+            ref={searchInputRef}
             type="search"
             className="nb-search"
             placeholder="Search notes..."
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' || !q) return;
+              const firstMatchId = orderedMatchingNoteIds[0];
+              if (!firstMatchId) return;
+              e.preventDefault();
+              onOpenFromSearch(firstMatchId);
+            }}
             aria-label="Search notes"
           />
         </div>
@@ -377,7 +429,7 @@ export default function Sidebar({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && newFolderName.trim()) {
                 const id = onCreateFolder(newFolderName.trim());
-                setOpenFolders((prev) => new Set([...prev, id]));
+                updateOpenFolders((prev) => new Set([...prev, id]));
                 setAddingFolder(false);
               } else if (e.key === 'Escape') {
                 setAddingFolder(false);
@@ -386,7 +438,7 @@ export default function Sidebar({
             onBlur={() => {
               if (newFolderName.trim()) {
                 const id = onCreateFolder(newFolderName.trim());
-                setOpenFolders((prev) => new Set([...prev, id]));
+                updateOpenFolders((prev) => new Set([...prev, id]));
               }
               setAddingFolder(false);
             }}
@@ -446,7 +498,7 @@ export default function Sidebar({
               // Folder
               const folder = folders.find((f) => f.id === item.id);
               if (!folder) return null;
-              const isFolderOpen = openFolders.has(folder.id);
+              const isFolderOpen = openFolderSet.has(folder.id);
               const isOpen = isFolderOpen || !!q;
               const folderNoteIds = folderContents[folder.id] ?? [];
               const visibleCount = folderNoteIds.filter((nid) => {
@@ -493,12 +545,14 @@ export default function Sidebar({
                     <div
                       className="nb-folder-header"
                       onClick={() => {
-                        if (!isRenaming) setOpenFolders((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(folder.id)) next.delete(folder.id);
-                          else next.add(folder.id);
-                          return next;
-                        });
+                        if (!isRenaming) {
+                          updateOpenFolders((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(folder.id)) next.delete(folder.id);
+                            else next.add(folder.id);
+                            return next;
+                          });
+                        }
                       }}
                     >
                       <span className={`nb-folder-chevron${isOpen ? ' open' : ''}`} aria-hidden="true">
@@ -540,7 +594,7 @@ export default function Sidebar({
                           className="nb-folder-action-btn"
                           onClick={() => {
                             onCreate(folder.id);
-                            setOpenFolders((prev) => new Set([...prev, folder.id]));
+                            updateOpenFolders((prev) => new Set([...prev, folder.id]));
                           }}
                           title="New note in folder"
                           aria-label="New note in folder"

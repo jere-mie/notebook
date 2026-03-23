@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Note, Folder, SidebarItem, Theme } from './types';
+import { LANGUAGES, type Note, type Folder, type SidebarItem, type Theme } from './types';
 import Sidebar from './components/Sidebar';
 import Editor from './components/Editor';
 
@@ -7,6 +7,9 @@ const NOTES_KEY = 'notebook-notes';
 const THEME_KEY = 'notebook-theme';
 const SIDEBAR_WIDTH_KEY = 'notebook-sidebar-width';
 const FOLDERS_KEY = 'notebook-folders';
+const NOTE_MODE_KEY = 'notebook-note-mode';
+const NOTE_LANGUAGE_KEY = 'notebook-note-language';
+const OPEN_FOLDERS_KEY = 'notebook-open-folders';
 // sidebarOrder: ordered list of top-level items (folders + unfolderd notes)
 const SIDEBAR_ORDER_KEY = 'notebook-sidebar-order';
 // folderContents: map of folderId -> ordered note ids
@@ -16,21 +19,44 @@ function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
 }
 
-function makeBlankNote(): Note {
+function readPreferredIsCode(): boolean {
+  try {
+    return localStorage.getItem(NOTE_MODE_KEY) === 'code';
+  } catch {
+    return false;
+  }
+}
+
+function isValidLanguage(language: string): boolean {
+  return LANGUAGES.some((entry) => entry.value === language);
+}
+
+function readPreferredLanguage(): string {
+  try {
+    const language = localStorage.getItem(NOTE_LANGUAGE_KEY);
+    return language && isValidLanguage(language) ? language : 'markdown';
+  } catch {
+    return 'markdown';
+  }
+}
+
+function makeBlankNote(isCode = false, language = 'markdown'): Note {
   return {
     id: uid(),
     title: '',
     content: '',
-    isCode: false,
-    language: 'markdown',
+    isCode,
+    language,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
 }
 
-const initialDraft = makeBlankNote();
+const initialDraft = makeBlankNote(readPreferredIsCode(), readPreferredLanguage());
 
 export default function App() {
+  const [preferredIsCode, setPreferredIsCode] = useState(readPreferredIsCode);
+  const [preferredLanguage, setPreferredLanguage] = useState(readPreferredLanguage);
   const [notes, setNotes] = useState<Note[]>(() => {
     try {
       const saved = localStorage.getItem(NOTES_KEY);
@@ -63,6 +89,15 @@ export default function App() {
     } catch { return {}; }
   });
 
+  const [openFolders, setOpenFolders] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(OPEN_FOLDERS_KEY);
+      return saved ? (JSON.parse(saved) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
   // draft: open in editor but not yet in notes[]. Committed on first keystroke.
   const [draft, setDraft] = useState<Note | null>(initialDraft);
   const [selectedId, setSelectedId] = useState<string | null>(initialDraft.id);
@@ -72,6 +107,8 @@ export default function App() {
   });
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('editor');
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [searchFocusKey, setSearchFocusKey] = useState(0);
+  const [editorFocusKey, setEditorFocusKey] = useState(0);
 
   const handleExport = () => {
     const payload = { notes, folders, folderContents };
@@ -142,27 +179,19 @@ export default function App() {
   useEffect(() => { localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders)); }, [folders]);
   useEffect(() => { localStorage.setItem(SIDEBAR_ORDER_KEY, JSON.stringify(sidebarOrder)); }, [sidebarOrder]);
   useEffect(() => { localStorage.setItem(FOLDER_CONTENTS_KEY, JSON.stringify(folderContents)); }, [folderContents]);
+  useEffect(() => { localStorage.setItem(NOTE_MODE_KEY, preferredIsCode ? 'code' : 'text'); }, [preferredIsCode]);
+  useEffect(() => { localStorage.setItem(NOTE_LANGUAGE_KEY, preferredLanguage); }, [preferredLanguage]);
+  useEffect(() => { localStorage.setItem(OPEN_FOLDERS_KEY, JSON.stringify(openFolders)); }, [openFolders]);
 
   // Persist sidebar width
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
   }, [sidebarWidth]);
 
-  const filteredNotes = notes
-    .filter((n) => {
-      if (!query.trim()) return true;
-      const q = query.toLowerCase();
-      return (
-        n.title.toLowerCase().includes(q) ||
-        n.content.toLowerCase().includes(q)
-      );
-    })
-    .sort((a, b) => b.updatedAt - a.updatedAt);
-
   const savedNote = notes.find((n) => n.id === selectedId) ?? null;
 
-  const createNote = (folderId?: string) => {
-    const note = makeBlankNote();
+  const createNote = useCallback((folderId?: string) => {
+    const note = makeBlankNote(preferredIsCode, preferredLanguage);
     setDraft(note);
     setSelectedId(note.id);
     setMobileView('editor');
@@ -176,7 +205,13 @@ export default function App() {
       // Add as root-level item at the top
       setSidebarOrder((prev) => [{ type: 'note', id: note.id }, ...prev]);
     }
-  };
+  }, [preferredIsCode, preferredLanguage]);
+
+  const focusSearch = useCallback(() => {
+    setSidebarVisible(true);
+    setMobileView('list');
+    setSearchFocusKey((key) => key + 1);
+  }, []);
 
   const createFolder = (name: string): string => {
     const folder: Folder = { id: uid(), name };
@@ -192,6 +227,7 @@ export default function App() {
   const deleteFolder = (id: string) => {
     // Move notes inside this folder to root
     const orphaned = folderContents[id] ?? [];
+    setOpenFolders((prev) => prev.filter((folderId) => folderId !== id));
     setFolderContents((prev) => {
       const next = { ...prev };
       delete next[id];
@@ -269,6 +305,13 @@ export default function App() {
 
   // When the user types, commit the draft to notes[] then handle normally
   const updateNote = (id: string, updates: Partial<Note>) => {
+    if (typeof updates.isCode === 'boolean') {
+      setPreferredIsCode(updates.isCode);
+    }
+    if (typeof updates.language === 'string' && isValidLanguage(updates.language)) {
+      setPreferredLanguage(updates.language);
+    }
+
     if (draft && draft.id === id) {
       const committed = { ...draft, ...updates, updatedAt: Date.now() };
       setNotes((prev) => [committed, ...prev]);
@@ -309,33 +352,74 @@ export default function App() {
     }
   };
 
-  const selectNote = (id: string) => {
+  const selectNote = useCallback((id: string) => {
     // Discard an unedited draft when navigating to another note
     if (draft && draft.id === selectedId) {
       setDraft(null);
     }
     setSelectedId(id);
     setMobileView('editor');
-  };
+  }, [draft, selectedId]);
+
+  const openNoteFromSearch = useCallback((id: string) => {
+    selectNote(id);
+    setEditorFocusKey((key) => key + 1);
+  }, [selectNote]);
 
   // Active note: either the unsaved draft or a persisted note
   const activeNote = (draft && draft.id === selectedId) ? draft : savedNote;
 
+  const visibleSidebarNoteIds = (() => {
+    const q = query.trim().toLowerCase();
+    const folderIsOpen = new Set(openFolders);
+    const allNotes = new Map<string, Note>();
+
+    if (draft) allNotes.set(draft.id, draft);
+    for (const note of notes) allNotes.set(note.id, note);
+
+    const matchesQuery = (note: Note) => {
+      if (!q) return true;
+      return note.title.toLowerCase().includes(q) || note.content.toLowerCase().includes(q);
+    };
+
+    const orderedNoteIds: string[] = [];
+
+    for (const item of reconciledOrder) {
+      if (item.type === 'note') {
+        const note = allNotes.get(item.id);
+        if (note && matchesQuery(note)) orderedNoteIds.push(note.id);
+        continue;
+      }
+
+      const folderNoteIds = folderContents[item.id] ?? [];
+      if (!folderIsOpen.has(item.id) && !q) continue;
+
+      for (const noteId of folderNoteIds) {
+        const note = allNotes.get(noteId);
+        if (note && matchesQuery(note)) orderedNoteIds.push(note.id);
+      }
+    }
+
+    return orderedNoteIds;
+  })();
+
   // Navigate to the previous/next note in the sidebar order
   const navigateNote = useCallback((direction: 'up' | 'down') => {
-    const navList = [
-      ...(draft ? [draft] : []),
-      ...filteredNotes.filter((n) => !draft || n.id !== draft.id),
-    ];
-    if (navList.length < 2) return;
-    const currentIdx = navList.findIndex((n) => n.id === selectedId);
-    if (currentIdx === -1) return;
+    if (visibleSidebarNoteIds.length === 0) return;
+
+    const currentIdx = selectedId ? visibleSidebarNoteIds.indexOf(selectedId) : -1;
+    if (currentIdx === -1) {
+      selectNote(direction === 'down' ? visibleSidebarNoteIds[0] : visibleSidebarNoteIds[visibleSidebarNoteIds.length - 1]);
+      return;
+    }
+    if (visibleSidebarNoteIds.length < 2) return;
+
     const nextIdx =
       direction === 'down'
-        ? (currentIdx + 1) % navList.length
-        : (currentIdx - 1 + navList.length) % navList.length;
-    if (nextIdx !== currentIdx) selectNote(navList[nextIdx].id);
-  }, [draft, filteredNotes, selectedId, selectNote]); // eslint-disable-line react-hooks/exhaustive-deps
+        ? (currentIdx + 1) % visibleSidebarNoteIds.length
+        : (currentIdx - 1 + visibleSidebarNoteIds.length) % visibleSidebarNoteIds.length;
+    if (nextIdx !== currentIdx) selectNote(visibleSidebarNoteIds[nextIdx]);
+  }, [selectNote, selectedId, visibleSidebarNoteIds]);
 
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -361,12 +445,39 @@ export default function App() {
     window.addEventListener('mouseup', onMouseUp);
   };
 
-  // Ctrl+Up / Ctrl+Down for non-Monaco contexts (sidebar, title field, etc.)
+  // Global shortcuts for quick-open, new note, sidebar toggle, and note navigation.
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (!e.ctrlKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    if (e.defaultPrevented || e.isComposing) return;
+
+    const hasPrimaryModifier = e.ctrlKey || e.metaKey;
+    if (!hasPrimaryModifier) return;
+
+    if (e.key === 'p' || e.key === 'P') {
+      if (e.altKey) return;
+      e.preventDefault();
+      focusSearch();
+      return;
+    }
+
+    if (e.key === 'n' || e.key === 'N') {
+      if (!e.altKey) return;
+      e.preventDefault();
+      createNote();
+      return;
+    }
+
+    if (e.key === 'b' || e.key === 'B') {
+      if (e.altKey) return;
+      e.preventDefault();
+      setSidebarVisible((visible) => !visible);
+      return;
+    }
+
+    if (e.altKey) return;
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     e.preventDefault();
     navigateNote(e.key === 'ArrowDown' ? 'down' : 'up');
-  }, [navigateNote]);
+  }, [createNote, focusSearch, navigateNote]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -385,6 +496,9 @@ export default function App() {
           folders={folders}
           sidebarOrder={reconciledOrder}
           folderContents={folderContents}
+          openFolders={openFolders}
+          searchFocusKey={searchFocusKey}
+          onOpenFromSearch={openNoteFromSearch}
           selectedId={selectedId}
           query={query}
           theme={theme}
@@ -401,6 +515,7 @@ export default function App() {
           onReorderFolder={(folderId, newOrder) =>
             setFolderContents((prev) => ({ ...prev, [folderId]: newOrder }))
           }
+          onOpenFoldersChange={setOpenFolders}
           onExport={handleExport}
           onImport={handleImport}
           onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
@@ -413,7 +528,9 @@ export default function App() {
         className={`nb-editor${mobileView === 'list' ? ' nb-mobile-hide' : ''}`}
       >
         <Editor
+          key={activeNote?.id ?? 'empty'}
           note={activeNote}
+          focusRequestKey={editorFocusKey}
           theme={theme}
           sidebarVisible={sidebarVisible}
           onUpdate={updateNote}
