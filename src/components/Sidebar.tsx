@@ -15,7 +15,7 @@ interface SidebarProps {
   onSelect: (id: string) => void;
   onCreate: (folderId?: string) => void;
   onDelete: (id: string) => void;
-  onCreateFolder: (name: string) => void;
+  onCreateFolder: (name: string) => string;
   onRenameFolder: (id: string, name: string) => void;
   onDeleteFolder: (id: string) => void;
   onMoveNoteToFolder: (noteId: string, folderId: string | null, insertAt?: number) => void;
@@ -193,6 +193,7 @@ export default function Sidebar({
       const item = sidebarOrder[dragSource.index];
       if (item?.type === 'note') {
         onMoveNoteToFolder(item.id, folderId);
+        setOpenFolders((prev) => new Set([...prev, folderId]));
       }
     } else if (dragSource.kind === 'folder-note') {
       const srcFolderId = dragSource.folderId;
@@ -207,6 +208,7 @@ export default function Sidebar({
         onReorderFolder(folderId, contents);
       } else {
         onMoveNoteToFolder(noteId, folderId);
+        setOpenFolders((prev) => new Set([...prev, folderId]));
       }
     }
 
@@ -374,14 +376,18 @@ export default function Sidebar({
             onChange={(e) => setNewFolderName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && newFolderName.trim()) {
-                onCreateFolder(newFolderName.trim());
+                const id = onCreateFolder(newFolderName.trim());
+                setOpenFolders((prev) => new Set([...prev, id]));
                 setAddingFolder(false);
               } else if (e.key === 'Escape') {
                 setAddingFolder(false);
               }
             }}
             onBlur={() => {
-              if (newFolderName.trim()) onCreateFolder(newFolderName.trim());
+              if (newFolderName.trim()) {
+                const id = onCreateFolder(newFolderName.trim());
+                setOpenFolders((prev) => new Set([...prev, id]));
+              }
               setAddingFolder(false);
             }}
             aria-label="New folder name"

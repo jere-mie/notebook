@@ -178,10 +178,11 @@ export default function App() {
     }
   };
 
-  const createFolder = (name: string) => {
+  const createFolder = (name: string): string => {
     const folder: Folder = { id: uid(), name };
     setFolders((prev) => [...prev, folder]);
     setSidebarOrder((prev) => [{ type: 'folder', id: folder.id }, ...prev]);
+    return folder.id;
   };
 
   const renameFolder = (id: string, name: string) => {
