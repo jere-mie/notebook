@@ -12,7 +12,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/icon-192x192.png', 'icons/icon-512x512.png'],
       manifest: {
-        name: 'notebook.',
+        name: 'notebook',
         short_name: 'notebook',
         description: 'A beautiful, minimal notes app with code highlighting.',
         theme_color: '#C4612D',

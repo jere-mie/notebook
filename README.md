@@ -1,4 +1,4 @@
-# notebook.
+# notebook
 
 A beautiful, minimal notes app built with React, TypeScript, and Tailwind CSS. Designed for both desktop and mobile use.
 

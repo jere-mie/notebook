@@ -296,7 +296,7 @@ export default function Sidebar({
         <div className="nb-logo">
           <div className="nb-logo-left">
             <NotebookIcon />
-            <span className="nb-logo-text">notebook.</span>
+            <span className="nb-logo-text">notebook</span>
           </div>
           <button
             className="nb-theme-btn"
