@@ -39,7 +39,7 @@ npm run preview
 
 ## Author
 
-Created by [Jeremie Bornais](https://github.com/jere-mie) - [github.com/jere-mie](https://github.com/jere-mie)
+Created by [Jeremie Bornais](https://jeremie.bornais.ca) - [github.com/jere-mie](https://github.com/jere-mie)
 
 Source code: [github.com/jere-mie/notebook](https://github.com/jere-mie/notebook)
 

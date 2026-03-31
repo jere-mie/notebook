@@ -719,7 +719,7 @@ export default function Sidebar({
         </div>
         <div>
           By{' '}
-          <a href="https://github.com/jere-mie" target="_blank" rel="noopener noreferrer">
+          <a href="https://jeremie.bornais.ca" target="_blank" rel="noopener noreferrer">
             Jeremie Bornais
           </a>
         </div>
