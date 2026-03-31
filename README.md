@@ -10,6 +10,7 @@ Source: [github.com/jere-mie/notebook](https://github.com/jere-mie/notebook)
 - Start from an untitled draft and only commit it once you begin typing
 - Toggle notes between text mode and code mode
 - Edit code notes in Monaco with language-specific syntax support
+- Preview rendered Markdown for Markdown code notes, including LaTeX, Mermaid diagrams, and highlighted code fences, and toggle back to the raw Markdown source
 - Choose from 16 supported note languages: Markdown, Bash/Shell, C, C++, CSS, Go, HTML, Java, JavaScript, JSON, PHP, Python, Ruby, Rust, SQL, and TypeScript
 - Organize notes into folders
 - Drag and drop root notes, folders, and notes inside folders to reorder or re-home them

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import MonacoEditor, { type OnMount } from '@monaco-editor/react';
+import MarkdownPreview from './MarkdownPreview';
 import type { Note, Theme } from '../types';
 import { LANGUAGES } from '../types';
 
@@ -44,13 +45,21 @@ function EmptyState() {
 
 export default function Editor({ note, focusRequestKey, theme, sidebarVisible, onUpdate, onDelete, onBack, onToggleSidebar, onNavNote }: EditorProps) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [markdownPreviewState, setMarkdownPreviewState] = useState<{ noteId: string | null; visible: boolean }>({
+    noteId: null,
+    visible: false,
+  });
   const titleRef = useRef<HTMLInputElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const markdownPreviewRef = useRef<HTMLDivElement>(null);
   const monacoEditorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Always-current ref so Monaco's onMount closure never goes stale
   const onNavNoteRef = useRef(onNavNote);
   useEffect(() => { onNavNoteRef.current = onNavNote; }, [onNavNote]);
+
+  const isMarkdownDocument = !!note?.isCode && note.language === 'markdown';
+  const markdownPreview = isMarkdownDocument && markdownPreviewState.noteId === note?.id && markdownPreviewState.visible;
 
   useEffect(() => {
     return () => {
@@ -93,13 +102,17 @@ export default function Editor({ note, focusRequestKey, theme, sidebarVisible, o
 
     if (note.isCode) {
       requestAnimationFrame(() => {
+        if (isMarkdownDocument && markdownPreview) {
+          markdownPreviewRef.current?.focus();
+          return;
+        }
         monacoEditorRef.current?.focus();
       });
       return;
     }
 
     textAreaRef.current?.focus();
-  }, [focusRequestKey, note]);
+  }, [focusRequestKey, isMarkdownDocument, markdownPreview, note]);
 
   if (!note) return <EmptyState />;
 
@@ -183,6 +196,38 @@ export default function Editor({ note, focusRequestKey, theme, sidebarVisible, o
           </select>
         )}
 
+        {isMarkdownDocument && (
+          <button
+            className={`nb-preview-btn${markdownPreview ? ' active' : ''}`}
+            onClick={() => {
+              setMarkdownPreviewState((current) => ({
+                noteId: note.id,
+                visible: current.noteId === note.id ? !current.visible : true,
+              }));
+            }}
+            aria-pressed={markdownPreview}
+            aria-label={markdownPreview ? 'Show markdown source' : 'Show rendered preview'}
+          >
+            {markdownPreview ? (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 19.5V4.75A1.75 1.75 0 0 1 5.75 3h8.086a2 2 0 0 1 1.414.586l3.164 3.164A2 2 0 0 1 19 8.164V19.5A1.5 1.5 0 0 1 17.5 21h-12A1.5 1.5 0 0 1 4 19.5Z"/>
+                  <path d="M8 11h8M8 15h5M14 3v4h4"/>
+                </svg>
+                Markdown
+              </>
+            ) : (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                Preview
+              </>
+            )}
+          </button>
+        )}
+
         <div className="nb-editor-actions">
           <button
             className={`nb-delete-btn${deleteConfirm ? ' confirming' : ''}`}
@@ -231,31 +276,44 @@ export default function Editor({ note, focusRequestKey, theme, sidebarVisible, o
               aria-label="Note title"
             />
           </div>
-          <div className="nb-monaco-container">
-            <MonacoEditor
-              height="100%"
-              language={toMonacoLang(note.language)}
-              value={note.content}
-              theme={theme === 'dark' ? 'vs-dark' : 'vs'}
-              onChange={(v) => onUpdate(note.id, { content: v ?? '' })}
-              onMount={handleMonacoMount}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 13.5,
-                fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
-                fontLigatures: true,
-                lineNumbers: 'on',
-                wordWrap: 'on',
-                scrollBeyondLastLine: false,
-                tabSize: 2,
-                automaticLayout: true,
-                padding: { top: 14, bottom: 14 },
-                renderLineHighlight: 'line',
-                smoothScrolling: true,
-                cursorSmoothCaretAnimation: 'on',
-              }}
-            />
-          </div>
+          {isMarkdownDocument && markdownPreview ? (
+            <div
+              ref={markdownPreviewRef}
+              className="nb-markdown-preview-panel"
+              tabIndex={0}
+              aria-label="Markdown preview"
+            >
+              <div className="nb-markdown-preview">
+                <MarkdownPreview content={note.content} theme={theme} />
+              </div>
+            </div>
+          ) : (
+            <div className="nb-monaco-container">
+              <MonacoEditor
+                height="100%"
+                language={toMonacoLang(note.language)}
+                value={note.content}
+                theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+                onChange={(v) => onUpdate(note.id, { content: v ?? '' })}
+                onMount={handleMonacoMount}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 13.5,
+                  fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
+                  fontLigatures: true,
+                  lineNumbers: 'on',
+                  wordWrap: 'on',
+                  scrollBeyondLastLine: false,
+                  tabSize: 2,
+                  automaticLayout: true,
+                  padding: { top: 14, bottom: 14 },
+                  renderLineHighlight: 'line',
+                  smoothScrolling: true,
+                  cursorSmoothCaretAnimation: 'on',
+                }}
+              />
+            </div>
+          )}
         </>
       ) : (
         /* Text mode: scrollable body with title + textarea */
