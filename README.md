@@ -15,7 +15,9 @@ Source: [github.com/jere-mie/notebook](https://github.com/jere-mie/notebook)
 - Organize notes into folders
 - Drag and drop root notes, folders, and notes inside folders to reorder or re-home them
 - Search note titles and content in real time
-- Import and export notes as JSON
+- Attach files to notes - drag and drop, click to upload, or paste (Ctrl+V) from anywhere on the page
+- Preview, rename, download, and delete file attachments
+- Import and export notes as JSON (including file attachments - files are stored as base64 data URLs in the export)
 - Remember your preferred note mode and default code language for new notes
 - Toggle light and dark themes
 - Resize and collapse the sidebar on desktop
@@ -27,6 +29,8 @@ Source: [github.com/jere-mie/notebook](https://github.com/jere-mie/notebook)
 - New note: `Cmd+Enter` on macOS, `Ctrl+Enter` on Windows/Linux
 - Search: `Cmd+P` on macOS, `Ctrl+P` on Windows/Linux
 - Toggle sidebar: `Cmd+B` on macOS, `Ctrl+B` on Windows/Linux
+- Toggle attachments panel: `Cmd+Shift+F` on macOS, `Ctrl+Shift+F` on Windows/Linux
+- Close attachments panel / file preview: `Esc`
 - Previous / next note: `Cmd+Up` and `Cmd+Down` on macOS, `Ctrl+Up` and `Ctrl+Down` on Windows/Linux
 
 ## Stack
@@ -57,6 +61,9 @@ npm run preview
 ## Project Notes
 
 - Notes, folders, ordering, theme, sidebar width, open folders, and new-note preferences are stored in the browser
+- File attachments are stored as base64 data URLs in `localStorage` under the key `notebook-files` (keyed by note ID)
+- Exports include file attachments; imports merge attachments by file ID (duplicates are skipped)
+- The attachments panel is resizable - drag its left edge to adjust width; the width is remembered across sessions
 - Imports support both the current structured JSON payload and a legacy plain note array
 - The PWA service worker is enabled in development so install behavior can be tested locally
 

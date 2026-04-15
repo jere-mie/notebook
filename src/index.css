@@ -11,9 +11,9 @@
   --nb-text:         #1C1810;
   --nb-text-muted:   #7A7062;
   --nb-text-faint:   #B0A898;
-  --nb-accent:       #C4612D;
-  --nb-accent-hover: #A84E24;
-  --nb-accent-soft:  #FAEDE6;
+  --nb-accent:       #4F6AE6;
+  --nb-accent-hover: #3A55D1;
+  --nb-accent-soft:  #EEF1FD;
   --nb-code-bg:      #F0ECE3;
   --nb-danger:       #C43D2D;
   --nb-danger-soft:  #FAE6E3;
@@ -29,9 +29,9 @@
   --nb-text:         #F0E8DC;
   --nb-text-muted:   #A09080;
   --nb-text-faint:   #8B8074;
-  --nb-accent:       #E89050;
-  --nb-accent-hover: #F0A060;
-  --nb-accent-soft:  #3A2515;
+  --nb-accent:       #7B9BF8;
+  --nb-accent-hover: #9BB5FF;
+  --nb-accent-soft:  #1A2247;
   --nb-code-bg:      #0D0B09;
   --nb-danger:       #E05040;
   --nb-danger-soft:  #2E1510;
@@ -442,7 +442,7 @@ body {
   outline: none;
 }
 
-/* Folder action buttons (add note, rename, delete) — hidden until hover */
+/* Folder action buttons (add note, rename, delete) - hidden until hover */
 .nb-folder-actions {
   display: flex;
   align-items: center;
@@ -481,7 +481,7 @@ body {
   padding-left: 20px;
 }
 
-/* Drop zones — tall invisible hit target, thin colored line via ::before */
+/* Drop zones - tall invisible hit target, thin colored line via ::before */
 .nb-folder-drop-zone,
 .nb-root-drop-zone {
   height: 4px;
@@ -1175,6 +1175,597 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes nb-files-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Editor content wrapper (main area + files panel side-by-side) ── */
+.nb-editor-content-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nb-editor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ── Files button in editor header ──────────────────────────── */
+.nb-files-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 7px;
+  border: 1px solid var(--nb-border);
+  background: transparent;
+  color: var(--nb-text-muted);
+  font-family: var(--nb-font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  position: relative;
+}
+
+.nb-files-btn:hover {
+  background: var(--nb-surface-alt);
+  border-color: var(--nb-border-hard);
+  color: var(--nb-text);
+}
+
+.nb-files-btn.active {
+  background: var(--nb-accent-soft);
+  border-color: var(--nb-accent);
+  color: var(--nb-accent);
+}
+
+.nb-files-btn-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--nb-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.nb-files-btn.active .nb-files-btn-badge {
+  background: var(--nb-accent);
+  color: #fff;
+}
+
+/* ── Files Panel ──────────────────────────────────────────── */
+.nb-files-panel {
+  width: 300px;
+  min-width: 200px;
+  max-width: 560px;
+  background: var(--nb-surface);
+  border-left: 1px solid var(--nb-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: nb-files-fadein 0.18s ease both;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.nb-files-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--nb-border);
+  flex-shrink: 0;
+}
+
+.nb-files-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--nb-font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nb-text);
+}
+
+.nb-files-panel-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--nb-surface-alt);
+  border: 1px solid var(--nb-border);
+  color: var(--nb-text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.nb-files-panel-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nb-text-muted);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.nb-files-panel-close-btn:hover {
+  background: var(--nb-surface-alt);
+  color: var(--nb-text);
+}
+
+/* ── Files Panel Resize Handle ───────────────────────────── */
+.nb-files-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background-color 0.15s;
+}
+.nb-files-resize-handle:hover,
+.nb-files-resize-handle:active {
+  background: var(--nb-accent);
+  opacity: 0.35;
+}
+
+/* ── Drop Zone ───────────────────────────────────────────── */
+.nb-files-drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 12px 12px 0;
+  padding: 18px 16px;
+  border: 2px dashed var(--nb-border);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+  flex-shrink: 0;
+  color: var(--nb-text-muted);
+  text-align: center;
+}
+
+.nb-files-drop-zone:hover,
+.nb-files-drop-zone.drag-over {
+  border-color: var(--nb-accent);
+  background: var(--nb-accent-soft);
+  color: var(--nb-accent);
+}
+
+.nb-files-drop-label {
+  font-family: var(--nb-font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.nb-files-drop-hint {
+  font-size: 11px;
+  color: var(--nb-text-faint);
+  font-style: italic;
+}
+
+.nb-files-drop-zone.drag-over .nb-files-drop-hint {
+  color: var(--nb-accent);
+  opacity: 0.7;
+}
+
+.nb-files-input-hidden {
+  display: none;
+}
+
+/* ── Files Error ─────────────────────────────────────────── */
+.nb-files-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 12px 0;
+  padding: 7px 10px;
+  background: var(--nb-danger-soft);
+  border: 1px solid var(--nb-danger);
+  border-radius: 7px;
+  color: var(--nb-danger);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* ── Files List ──────────────────────────────────────────── */
+.nb-files-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--nb-border-hard) transparent;
+}
+
+.nb-files-list::-webkit-scrollbar { width: 4px; }
+.nb-files-list::-webkit-scrollbar-thumb {
+  background: var(--nb-border-hard);
+  border-radius: 2px;
+}
+
+/* ── Empty files state ──────────────────────────────────── */
+.nb-files-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 20px;
+  color: var(--nb-text-faint);
+  font-size: 13px;
+  font-style: italic;
+  text-align: center;
+}
+
+.nb-files-empty p { margin: 0; }
+
+/* ── File Item ──────────────────────────────────────────── */
+.nb-file-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 12px;
+  transition: background-color 0.12s;
+  position: relative;
+  cursor: pointer;
+}
+
+.nb-file-item:hover {
+  background: var(--nb-surface-alt);
+}
+
+.nb-file-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid var(--nb-border);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.nb-file-thumb:hover {
+  border-color: var(--nb-accent);
+}
+
+.nb-file-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nb-file-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--nb-surface-alt);
+  border: 1px solid var(--nb-border);
+  color: var(--nb-text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.nb-file-icon-wrap:hover {
+  border-color: var(--nb-accent);
+  background: var(--nb-accent-soft);
+  color: var(--nb-accent);
+}
+
+.nb-file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nb-file-name {
+  font-family: var(--nb-font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--nb-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.nb-file-rename-input {
+  width: 100%;
+  padding: 2px 6px;
+  background: var(--nb-bg);
+  border: 1px solid var(--nb-accent);
+  border-radius: 5px;
+  color: var(--nb-text);
+  font-family: var(--nb-font-ui);
+  font-size: 12.5px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--nb-accent-soft);
+}
+
+.nb-file-meta {
+  font-size: 11px;
+  color: var(--nb-text-faint);
+  font-style: italic;
+}
+
+.nb-file-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  flex-shrink: 0;
+}
+
+.nb-file-item:hover .nb-file-actions,
+.nb-file-item:focus-within .nb-file-actions {
+  opacity: 1;
+}
+
+.nb-file-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--nb-text-muted);
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.nb-file-action-btn:hover {
+  background: var(--nb-surface);
+  color: var(--nb-text);
+}
+
+.nb-file-delete-btn:hover,
+.nb-file-delete-btn.confirming {
+  background: var(--nb-danger-soft);
+  color: var(--nb-danger);
+}
+
+/* ── File Preview Modal ──────────────────────────────────── */
+.nb-file-preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+  animation: nb-fadein 0.18s ease both;
+}
+
+.nb-file-preview-modal {
+  background: var(--nb-surface);
+  border: 1px solid var(--nb-border-hard);
+  border-radius: 14px;
+  width: min(90vw, 880px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+}
+
+.nb-file-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--nb-border);
+  flex-shrink: 0;
+}
+
+.nb-file-preview-title {
+  font-family: var(--nb-font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--nb-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.nb-file-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.nb-file-preview-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--nb-border);
+  background: transparent;
+  color: var(--nb-text-muted);
+  font-family: var(--nb-font-ui);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.nb-file-preview-download-btn:hover {
+  background: var(--nb-surface-alt);
+  border-color: var(--nb-border-hard);
+  color: var(--nb-text);
+}
+
+.nb-file-preview-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  border: 1px solid var(--nb-border);
+  background: transparent;
+  color: var(--nb-text-muted);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.nb-file-preview-close-btn:hover {
+  background: var(--nb-surface-alt);
+  color: var(--nb-text);
+}
+
+.nb-file-preview-body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  min-height: 0;
+}
+
+.nb-file-preview-image {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.nb-file-preview-video {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 8px;
+}
+
+.nb-file-preview-audio {
+  width: 100%;
+  max-width: 500px;
+}
+
+.nb-file-preview-pdf {
+  width: 100%;
+  height: 70vh;
+  border: none;
+  border-radius: 8px;
+}
+
+.nb-file-preview-text {
+  width: 100%;
+  max-height: 65vh;
+  overflow: auto;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--nb-text);
+  background: var(--nb-code-bg);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--nb-border);
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+.nb-file-preview-no-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--nb-text-faint);
+  text-align: center;
+}
+
+.nb-file-preview-no-preview-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--nb-surface-alt);
+  border: 1px solid var(--nb-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nb-text-muted);
+}
+
+.nb-file-preview-no-preview p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* ── Global Drag Overlay ───────────────────────────────────── */
+.nb-drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: color-mix(in srgb, var(--nb-accent) 12%, transparent);
+  border: 3px dashed var(--nb-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: nb-files-fadein 0.12s ease both;
+}
+
+.nb-drag-overlay-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 32px 48px;
+  border-radius: 18px;
+  background: var(--nb-surface);
+  border: 1px solid var(--nb-accent);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+  color: var(--nb-accent);
+}
+
+.nb-drag-overlay-inner p {
+  margin: 0;
+  font-family: var(--nb-font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--nb-accent);
+}
+
 /* ── Mobile ───────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .nb-shell { flex-direction: column; }
@@ -1207,4 +1798,35 @@ body {
   }
 
   .nb-title-input { font-size: 24px; }
+
+  /* Files panel: full-width overlay on mobile */
+  .nb-editor-content-wrap {
+    position: relative;
+  }
+
+  .nb-files-panel {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100%;
+    z-index: 100;
+    border-left: none;
+    border-top: 1px solid var(--nb-border);
+  }
+
+  /* Hide resize handle on mobile */
+  .nb-files-resize-handle {
+    display: none;
+  }
+
+  .nb-file-preview-overlay {
+    padding: 10px;
+  }
+
+  .nb-file-preview-modal {
+    width: 100%;
+    max-height: 95vh;
+    border-radius: 10px;
+  }
 }

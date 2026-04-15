@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import MonacoEditor, { type OnMount } from '@monaco-editor/react';
 import MarkdownPreview from './MarkdownPreview';
-import type { Note, Theme } from '../types';
+import FilesPanel from './FilesPanel';
+import type { Note, Theme, NoteFile } from '../types';
 import { LANGUAGES } from '../types';
 
 // Map Prism language IDs used in Note.language → Monaco language IDs
@@ -18,11 +19,19 @@ interface EditorProps {
   focusRequestKey: number;
   theme: Theme;
   sidebarVisible: boolean;
+  files: NoteFile[];
+  filesOpen: boolean;
+  filesPanelWidth: number;
+  onToggleFiles: () => void;
+  onFilesPanelResizeStart: (e: React.MouseEvent) => void;
   onUpdate: (id: string, updates: Partial<Note>) => void;
   onDelete: (id: string) => void;
   onBack: () => void;
   onToggleSidebar: () => void;
   onNavNote: (direction: 'up' | 'down') => void;
+  onAddFiles: (noteId: string, files: NoteFile[]) => void;
+  onRenameFile: (noteId: string, fileId: string, newName: string) => void;
+  onDeleteFile: (noteId: string, fileId: string) => void;
 }
 
 // Empty state shown when no note is selected
@@ -43,7 +52,7 @@ function EmptyState() {
   );
 }
 
-export default function Editor({ note, focusRequestKey, theme, sidebarVisible, onUpdate, onDelete, onBack, onToggleSidebar, onNavNote }: EditorProps) {
+export default function Editor({ note, focusRequestKey, theme, sidebarVisible, files, filesOpen, filesPanelWidth, onToggleFiles, onFilesPanelResizeStart, onUpdate, onDelete, onBack, onToggleSidebar, onNavNote, onAddFiles, onRenameFile, onDeleteFile }: EditorProps) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [markdownPreviewState, setMarkdownPreviewState] = useState<{ noteId: string | null; visible: boolean }>({
     noteId: null,
@@ -137,7 +146,7 @@ export default function Editor({ note, focusRequestKey, theme, sidebarVisible, o
           Notes
         </button>
 
-        {/* Sidebar toggle — desktop only */}
+        {/* Sidebar toggle - desktop only */}
         <button
           className="nb-sidebar-toggle-btn"
           onClick={onToggleSidebar}
@@ -230,6 +239,19 @@ export default function Editor({ note, focusRequestKey, theme, sidebarVisible, o
 
         <div className="nb-editor-actions">
           <button
+            className={`nb-files-btn${filesOpen ? ' active' : ''}`}
+            onClick={onToggleFiles}
+            aria-pressed={filesOpen}
+            aria-label={filesOpen ? 'Close attachments panel' : 'Open attachments panel'}
+            title="Attachments (Ctrl+Shift+F)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+            Files
+            {files.length > 0 && <span className="nb-files-btn-badge">{files.length}</span>}
+          </button>
+          <button
             className={`nb-delete-btn${deleteConfirm ? ' confirming' : ''}`}
             onClick={handleDelete}
             aria-label={deleteConfirm ? 'Confirm delete' : 'Delete note'}
@@ -256,6 +278,8 @@ export default function Editor({ note, focusRequestKey, theme, sidebarVisible, o
         </div>
       </div>
 
+      <div className="nb-editor-content-wrap">
+        <div className="nb-editor-main">
       {note.isCode ? (
         /* Code mode: title above Monaco, Monaco fills remaining height */
         <>
@@ -337,6 +361,21 @@ export default function Editor({ note, focusRequestKey, theme, sidebarVisible, o
           />
         </div>
       )}
+        </div>
+
+        {filesOpen && (
+          <FilesPanel
+            noteId={note.id}
+            files={files}
+            width={filesPanelWidth}
+            onResizeStart={onFilesPanelResizeStart}
+            onAddFiles={onAddFiles}
+            onRenameFile={onRenameFile}
+            onDeleteFile={onDeleteFile}
+            onClose={onToggleFiles}
+          />
+        )}
+      </div>
     </>
   );
 }

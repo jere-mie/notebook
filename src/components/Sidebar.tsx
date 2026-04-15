@@ -43,22 +43,7 @@ function formatDate(ts: number): string {
 }
 
 function NotebookIcon() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <rect x="8" y="2" width="18" height="28" rx="3" fill="var(--nb-accent)"/>
-      <rect x="11" y="4" width="13" height="24" rx="2" fill="var(--nb-bg)"/>
-      <circle cx="8" cy="9.5" r="2.5" fill="var(--nb-surface)"/>
-      <circle cx="8" cy="16"  r="2.5" fill="var(--nb-surface)"/>
-      <circle cx="8" cy="22.5" r="2.5" fill="var(--nb-surface)"/>
-      <circle cx="8" cy="9.5" r="1.3" fill="var(--nb-accent)"/>
-      <circle cx="8" cy="16"  r="1.3" fill="var(--nb-accent)"/>
-      <circle cx="8" cy="22.5" r="1.3" fill="var(--nb-accent)"/>
-      <line x1="14" y1="10" x2="21" y2="10" stroke="var(--nb-border-hard)" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="14" y1="14" x2="21" y2="14" stroke="var(--nb-border-hard)" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="14" y1="18" x2="21" y2="18" stroke="var(--nb-border-hard)" strokeWidth="1.5" strokeLinecap="round"/>
-      <circle cx="20" cy="22" r="1.3" fill="var(--nb-accent)"/>
-    </svg>
-  );
+  return null;
 }
 
 type DragSource =
@@ -342,7 +327,7 @@ export default function Sidebar({
         <div className="nb-logo">
           <div className="nb-logo-left">
             <NotebookIcon />
-            <span className="nb-logo-text">notebook</span>
+            <span className="nb-logo-text">Notebook</span>
           </div>
           <button
             className="nb-theme-btn"
@@ -430,7 +415,7 @@ export default function Sidebar({
             autoFocus
             type="text"
             className="nb-folder-name-input"
-            placeholder="Folder name…"
+            placeholder="Folder name..."
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
             onKeyDown={(e) => {

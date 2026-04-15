@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { LANGUAGES, type Note, type Folder, type SidebarItem, type Theme } from './types';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { LANGUAGES, type Note, type Folder, type SidebarItem, type Theme, type NoteFile } from './types';
 import Sidebar from './components/Sidebar';
 import Editor from './components/Editor';
 
@@ -14,6 +14,9 @@ const OPEN_FOLDERS_KEY = 'notebook-open-folders';
 const SIDEBAR_ORDER_KEY = 'notebook-sidebar-order';
 // folderContents: map of folderId -> ordered note ids
 const FOLDER_CONTENTS_KEY = 'notebook-folder-contents';
+// files: map of noteId -> NoteFile[]
+const FILES_KEY = 'notebook-files';
+const FILES_PANEL_WIDTH_KEY = 'notebook-files-panel-width';
 
 function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
@@ -98,6 +101,14 @@ export default function App() {
     } catch { return {}; }
   });
 
+  // Note file attachments: { [noteId]: NoteFile[] }
+  const [noteFiles, setNoteFiles] = useState<Record<string, NoteFile[]>>(() => {
+    try {
+      const saved = localStorage.getItem(FILES_KEY);
+      return saved ? (JSON.parse(saved) as Record<string, NoteFile[]>) : {};
+    } catch { return {}; }
+  });
+
   const [openFolders, setOpenFolders] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(OPEN_FOLDERS_KEY);
@@ -118,9 +129,17 @@ export default function App() {
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [searchFocusKey, setSearchFocusKey] = useState(0);
   const [editorFocusKey, setEditorFocusKey] = useState(0);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [filesPanelWidth, setFilesPanelWidth] = useState(() => {
+    const saved = localStorage.getItem(FILES_PANEL_WIDTH_KEY);
+    return saved ? parseInt(saved, 10) : 300;
+  });
+  const [globalDragging, setGlobalDragging] = useState(false);
+  // Stable ref to the currently active note ID - used in global paste/drop handlers
+  const activeNoteIdRef = useRef<string | null>(null);
 
   const handleExport = () => {
-    const payload = { notes, folders, folderContents };
+    const payload = { notes, folders, folderContents, noteFiles };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -135,10 +154,11 @@ export default function App() {
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
-        // Support both plain array (legacy) and { notes, folders, folderContents } object
+        // Support both plain array (legacy) and { notes, folders, folderContents, noteFiles } object
         const importedNotes: Note[] = Array.isArray(data) ? data : (data.notes ?? []);
         const importedFolders: Folder[] = Array.isArray(data) ? [] : (data.folders ?? []);
         const importedFolderContents: Record<string, string[]> = Array.isArray(data) ? {} : (data.folderContents ?? {});
+        const importedNoteFiles: Record<string, NoteFile[]> = Array.isArray(data) ? {} : (data.noteFiles ?? {});
         const validNotes = importedNotes.filter(
           (n) => typeof n.id === 'string' && typeof n.title === 'string' && typeof n.content === 'string'
         );
@@ -162,6 +182,24 @@ export default function App() {
           }
           return next;
         });
+        // Merge imported file attachments, skipping duplicates by file ID
+        if (Object.keys(importedNoteFiles).length > 0) {
+          setNoteFiles((prev) => {
+            const next = { ...prev };
+            for (const [noteId, files] of Object.entries(importedNoteFiles)) {
+              if (Array.isArray(files)) {
+                const existingIds = new Set((next[noteId] ?? []).map((f) => f.id));
+                const incoming = files.filter(
+                  (f) => typeof f.id === 'string' && typeof f.dataUrl === 'string' && !existingIds.has(f.id)
+                );
+                if (incoming.length > 0) {
+                  next[noteId] = [...(next[noteId] ?? []), ...incoming];
+                }
+              }
+            }
+            return next;
+          });
+        }
       } catch {
         // ignore malformed files
       }
@@ -192,10 +230,29 @@ export default function App() {
   useEffect(() => { localStorage.setItem(NOTE_LANGUAGE_KEY, preferredLanguage); }, [preferredLanguage]);
   useEffect(() => { localStorage.setItem(OPEN_FOLDERS_KEY, JSON.stringify(openFolders)); }, [openFolders]);
 
+  // Persist note files
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILES_KEY, JSON.stringify(noteFiles));
+    } catch {
+      // Storage may be full - silently ignore
+    }
+  }, [noteFiles]);
+
   // Persist sidebar width
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
   }, [sidebarWidth]);
+
+  // Persist files panel width
+  useEffect(() => {
+    localStorage.setItem(FILES_PANEL_WIDTH_KEY, String(filesPanelWidth));
+  }, [filesPanelWidth]);
+
+  // Keep activeNoteIdRef in sync for use in stable global event handlers
+  useEffect(() => {
+    activeNoteIdRef.current = selectedId ?? draft?.id ?? null;
+  });
 
   const savedNote = notes.find((n) => n.id === selectedId) ?? null;
 
@@ -355,11 +412,129 @@ export default function App() {
       for (const [fid, nids] of Object.entries(prev)) next[fid] = nids.filter((n) => n !== id);
       return next;
     });
+    // Remove files for deleted note
+    setNoteFiles((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     if (selectedId === id) {
       setSelectedId(null);
       setMobileView('list');
     }
   };
+
+  const addNoteFiles = useCallback((noteId: string, files: NoteFile[]) => {
+    setNoteFiles((prev) => ({
+      ...prev,
+      [noteId]: [...(prev[noteId] ?? []), ...files],
+    }));
+  }, []);
+
+  const renameNoteFile = useCallback((noteId: string, fileId: string, newName: string) => {
+    setNoteFiles((prev) => ({
+      ...prev,
+      [noteId]: (prev[noteId] ?? []).map((f) =>
+        f.id === fileId ? { ...f, name: newName } : f
+      ),
+    }));
+  }, []);
+
+  const deleteNoteFile = useCallback((noteId: string, fileId: string) => {
+    setNoteFiles((prev) => ({
+      ...prev,
+      [noteId]: (prev[noteId] ?? []).filter((f) => f.id !== fileId),
+    }));
+  }, []);
+
+  // Read files from a FileList and attach them to the given note
+  const processFilesGlobal = useCallback((fileList: File[], noteId: string) => {
+    const newFiles: NoteFile[] = [];
+    let processed = 0;
+    fileList.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        newFiles.push({ id: uid(), name: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, dataUrl, createdAt: Date.now() });
+        processed++;
+        if (processed === fileList.length) addNoteFiles(noteId, newFiles);
+      };
+      reader.onerror = () => {
+        processed++;
+        if (processed === fileList.length && newFiles.length > 0) addNoteFiles(noteId, newFiles);
+      };
+      reader.readAsDataURL(file);
+    });
+  }, [addNoteFiles]);
+
+  // Global paste handler: attach files to the current note from anywhere on the page.
+  // Uses capture phase so it fires even when Monaco editor has focus (Monaco stops propagation).
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      // Let FilesPanel handle pastes inside it (it calls stopPropagation)
+      const target = e.target;
+      if (target instanceof Element && target.closest('.nb-files-panel')) return;
+      const files = Array.from(e.clipboardData?.files ?? []);
+      if (files.length === 0) return;
+      const noteId = activeNoteIdRef.current;
+      if (!noteId) return;
+      e.preventDefault();
+      e.stopPropagation(); // prevent Monaco from seeing a file paste
+      processFilesGlobal(files, noteId);
+      setFilesOpen(true);
+    };
+    document.addEventListener('paste', onPaste, { capture: true });
+    return () => document.removeEventListener('paste', onPaste, { capture: true });
+  }, [processFilesGlobal]);
+
+  // Global drag-and-drop handler: show overlay and attach dropped files
+  useEffect(() => {
+    let dragCounter = 0;
+
+    const hasFiles = (dt: DataTransfer | null) =>
+      Array.from(dt?.types ?? []).includes('Files');
+
+    const onDragEnter = (e: DragEvent) => {
+      if (!hasFiles(e.dataTransfer)) return;
+      dragCounter++;
+      setGlobalDragging(true);
+    };
+    const onDragLeave = (e: DragEvent) => {
+      if (!hasFiles(e.dataTransfer)) return;
+      dragCounter = Math.max(0, dragCounter - 1);
+      if (dragCounter === 0) setGlobalDragging(false);
+    };
+    const onDragOver = (e: DragEvent) => {
+      if (!hasFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    };
+    const onDrop = (e: DragEvent) => {
+      dragCounter = 0;
+      setGlobalDragging(false);
+      // Let FilesPanel handle its own drops
+      const target = e.target;
+      if (target instanceof Element && target.closest('.nb-files-panel')) return;
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      if (files.length === 0) return;
+      const noteId = activeNoteIdRef.current;
+      if (!noteId) return;
+      e.preventDefault();
+      processFilesGlobal(files, noteId);
+      setFilesOpen(true);
+    };
+
+    document.addEventListener('dragenter', onDragEnter);
+    document.addEventListener('dragleave', onDragLeave);
+    document.addEventListener('dragover', onDragOver);
+    document.addEventListener('drop', onDrop);
+    return () => {
+      document.removeEventListener('dragenter', onDragEnter);
+      document.removeEventListener('dragleave', onDragLeave);
+      document.removeEventListener('dragover', onDragOver);
+      document.removeEventListener('drop', onDrop);
+    };
+  }, [processFilesGlobal]);
 
   const selectNote = useCallback((id: string) => {
     if (id === selectedId) {
@@ -459,9 +634,43 @@ export default function App() {
     window.addEventListener('mouseup', onMouseUp);
   };
 
+  const handleFilesPanelResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = filesPanelWidth;
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (ev: MouseEvent) => {
+      // Dragging the left edge of the panel leftward increases its width
+      const next = Math.min(560, Math.max(200, startWidth + startX - ev.clientX));
+      setFilesPanelWidth(next);
+    };
+
+    const onMouseUp = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
   // Global shortcuts for quick-open, new note, sidebar toggle, and note navigation.
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.defaultPrevented || e.isComposing) return;
+
+    // Escape: close files panel (but let the preview modal handle it first if open)
+    if (e.key === 'Escape' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+      const previewOpen = !!document.querySelector('.nb-file-preview-overlay');
+      if (!previewOpen) {
+        setFilesOpen((current) => (current ? false : current));
+      }
+      return;
+    }
 
     const hasPrimaryModifier = e.ctrlKey || e.metaKey;
     if (!hasPrimaryModifier) return;
@@ -484,6 +693,12 @@ export default function App() {
       if (e.altKey || e.shiftKey) return;
       e.preventDefault();
       setSidebarVisible((visible) => !visible);
+      return;
+    }
+
+    if (e.code === 'KeyF' && e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      setFilesOpen((v) => !v);
       return;
     }
 
@@ -548,13 +763,33 @@ export default function App() {
           focusRequestKey={editorFocusKey}
           theme={theme}
           sidebarVisible={sidebarVisible}
+          files={activeNote ? (noteFiles[activeNote.id] ?? []) : []}
+          filesOpen={filesOpen}
+          filesPanelWidth={filesPanelWidth}
+          onToggleFiles={() => setFilesOpen((v) => !v)}
+          onFilesPanelResizeStart={handleFilesPanelResizeStart}
           onUpdate={updateNote}
           onDelete={deleteNote}
           onBack={() => setMobileView('list')}
           onToggleSidebar={() => setSidebarVisible((v) => !v)}
           onNavNote={navigateNote}
+          onAddFiles={addNoteFiles}
+          onRenameFile={renameNoteFile}
+          onDeleteFile={deleteNoteFile}
         />
       </main>
+      {globalDragging && (
+        <div className="nb-drag-overlay" aria-hidden="true">
+          <div className="nb-drag-overlay-inner">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <p>Drop files to attach to note</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
