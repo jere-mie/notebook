@@ -62,6 +62,68 @@ function makeBlankNote(isCode = false, language = 'markdown'): Note {
   };
 }
 
+function reconcileSidebarOrder(
+  sidebarOrder: SidebarItem[],
+  notes: Note[],
+  draft: Note | null,
+  folders: Folder[],
+  folderContents: Record<string, string[]>,
+): SidebarItem[] {
+  const folderIds = folders.map((folder) => folder.id);
+  const allFolderIds = new Set(folderIds);
+  const noteIdsInFolders = new Set(Object.values(folderContents).flat());
+  const persistedRootNoteIds = notes
+    .map((note) => note.id)
+    .filter((id) => !noteIdsInFolders.has(id));
+  const rootNoteIds = new Set(persistedRootNoteIds);
+  const draftIsRoot = !!draft && !noteIdsInFolders.has(draft.id);
+
+  if (draftIsRoot) {
+    rootNoteIds.add(draft.id);
+  }
+
+  const seen = new Set<string>();
+  const cleaned: SidebarItem[] = [];
+
+  for (const item of sidebarOrder) {
+    if (item.type === 'folder' && allFolderIds.has(item.id) && !seen.has(item.id)) {
+      cleaned.push(item);
+      seen.add(item.id);
+      continue;
+    }
+
+    if (item.type === 'note' && rootNoteIds.has(item.id) && !seen.has(item.id)) {
+      cleaned.push(item);
+      seen.add(item.id);
+    }
+  }
+
+  const reconciled: SidebarItem[] = [];
+
+  if (draftIsRoot && draft && !seen.has(draft.id)) {
+    reconciled.push({ type: 'note', id: draft.id });
+    seen.add(draft.id);
+  }
+
+  reconciled.push(...cleaned);
+
+  for (const id of persistedRootNoteIds) {
+    if (!seen.has(id)) {
+      reconciled.push({ type: 'note', id });
+      seen.add(id);
+    }
+  }
+
+  for (const id of folderIds) {
+    if (!seen.has(id)) {
+      reconciled.push({ type: 'folder', id });
+      seen.add(id);
+    }
+  }
+
+  return reconciled;
+}
+
 const initialDraft = makeBlankNote(readPreferredIsCode(), readPreferredLanguage());
 
 export default function App() {
@@ -258,6 +320,7 @@ export default function App() {
 
   const createNote = useCallback((folderId?: string) => {
     const note = makeBlankNote(preferredIsCode, preferredLanguage);
+    const previousDraftId = draft?.id ?? null;
     setDraft(note);
     setSelectedId(note.id);
     setMobileView('editor');
@@ -269,9 +332,15 @@ export default function App() {
       }));
     } else {
       // Add as root-level item at the top
-      setSidebarOrder((prev) => [{ type: 'note', id: note.id }, ...prev]);
+      setSidebarOrder((prev) => {
+        const actualOrder = reconcileSidebarOrder(prev, notes, draft, folders, folderContents);
+        return [
+          { type: 'note', id: note.id },
+          ...actualOrder.filter((item) => !(item.type === 'note' && item.id === previousDraftId)),
+        ];
+      });
     }
-  }, [preferredIsCode, preferredLanguage]);
+  }, [draft, folderContents, folders, notes, preferredIsCode, preferredLanguage]);
 
   const focusSearch = useCallback(() => {
     setSidebarVisible(true);
@@ -333,41 +402,7 @@ export default function App() {
   };
 
   // Reconcile sidebarOrder: add any notes/folders missing from it, drop deleted ones
-  const reconciledOrder = (() => {
-    const allFolderIds = new Set(folders.map((f) => f.id));
-    const noteIdsInFolders = new Set(
-      Object.values(folderContents).flat()
-    );
-    const allNoteIds = new Set([
-      ...(draft ? [draft.id] : []),
-      ...notes.map((n) => n.id),
-    ]);
-    // Root notes: notes not in any folder
-    const rootNoteIds = new Set(
-      [...allNoteIds].filter((id) => !noteIdsInFolders.has(id))
-    );
-    // Build cleaned order: keep valid items, then append any new ones
-    const seen = new Set<string>();
-    const cleaned: SidebarItem[] = [];
-    for (const item of sidebarOrder) {
-      if (item.type === 'folder' && allFolderIds.has(item.id) && !seen.has(item.id)) {
-        cleaned.push(item);
-        seen.add(item.id);
-      } else if (item.type === 'note' && rootNoteIds.has(item.id) && !seen.has(item.id)) {
-        cleaned.push(item);
-        seen.add(item.id);
-      }
-    }
-    // Append unseen root notes (newly created draft not yet in order)
-    for (const id of rootNoteIds) {
-      if (!seen.has(id)) cleaned.unshift({ type: 'note', id });
-    }
-    // Append unseen folders
-    for (const id of allFolderIds) {
-      if (!seen.has(id)) cleaned.push({ type: 'folder', id });
-    }
-    return cleaned;
-  })();
+  const reconciledOrder = reconcileSidebarOrder(sidebarOrder, notes, draft, folders, folderContents);
 
   // When the user types, commit the draft to notes[] then handle normally
   const updateNote = (id: string, updates: Partial<Note>) => {
@@ -610,6 +645,43 @@ export default function App() {
     if (nextIdx !== currentIdx) selectNote(visibleSidebarNoteIds[nextIdx]);
   }, [selectNote, selectedId, visibleSidebarNoteIds]);
 
+  const moveNote = useCallback((direction: 'up' | 'down') => {
+    if (!selectedId) return;
+
+    const delta = direction === 'down' ? 1 : -1;
+    const folderEntry = Object.entries(folderContents).find(([, noteIds]) => noteIds.includes(selectedId));
+
+    if (folderEntry) {
+      const [folderId] = folderEntry;
+      setFolderContents((prev) => {
+        const noteIds = prev[folderId] ?? [];
+        const currentIndex = noteIds.indexOf(selectedId);
+        if (currentIndex < 0 || noteIds.length < 2) return prev;
+
+        const nextIndex = (currentIndex + delta + noteIds.length) % noteIds.length;
+
+        const nextNoteIds = [...noteIds];
+        const [moved] = nextNoteIds.splice(currentIndex, 1);
+        nextNoteIds.splice(nextIndex, 0, moved);
+        return { ...prev, [folderId]: nextNoteIds };
+      });
+      return;
+    }
+
+    setSidebarOrder((prev) => {
+      const actualOrder = reconcileSidebarOrder(prev, notes, draft, folders, folderContents);
+      const currentIndex = actualOrder.findIndex((item) => item.type === 'note' && item.id === selectedId);
+      if (currentIndex < 0 || actualOrder.length < 2) return prev;
+
+      const nextIndex = (currentIndex + delta + actualOrder.length) % actualOrder.length;
+
+      const nextOrder = [...actualOrder];
+      const [moved] = nextOrder.splice(currentIndex, 1);
+      nextOrder.splice(nextIndex, 0, moved);
+      return nextOrder;
+    });
+  }, [draft, folderContents, folders, notes, selectedId]);
+
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -662,6 +734,7 @@ export default function App() {
   // Global shortcuts for quick-open, new note, sidebar toggle, and note navigation.
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.defaultPrevented || e.isComposing) return;
+    const targetIsMonaco = e.target instanceof Element && !!e.target.closest('.monaco-editor');
 
     // Escape: close files panel (but let the preview modal handle it first if open)
     if (e.key === 'Escape' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
@@ -702,11 +775,19 @@ export default function App() {
       return;
     }
 
-    if (e.altKey) return;
+    if (e.shiftKey && !e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      if (targetIsMonaco) return;
+      e.preventDefault();
+      moveNote(e.key === 'ArrowDown' ? 'down' : 'up');
+      return;
+    }
+
+    if (e.altKey || e.shiftKey) return;
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    if (targetIsMonaco) return;
     e.preventDefault();
     navigateNote(e.key === 'ArrowDown' ? 'down' : 'up');
-  }, [createNote, focusSearch, navigateNote]);
+  }, [createNote, focusSearch, moveNote, navigateNote]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown, true);
@@ -773,6 +854,7 @@ export default function App() {
           onBack={() => setMobileView('list')}
           onToggleSidebar={() => setSidebarVisible((v) => !v)}
           onNavNote={navigateNote}
+          onMoveNote={moveNote}
           onAddFiles={addNoteFiles}
           onRenameFile={renameNoteFile}
           onDeleteFile={deleteNoteFile}

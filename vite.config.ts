@@ -3,9 +3,31 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const reactRefreshPreamble = `
+import RefreshRuntime from "/@react-refresh";
+RefreshRuntime.injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;
+window.__vite_plugin_react_preamble_installed__ = true;
+`
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    {
+      name: 'react-refresh-preamble',
+      apply: 'serve',
+      transformIndexHtml() {
+        return [
+          {
+            tag: 'script',
+            attrs: { type: 'module' },
+            children: reactRefreshPreamble,
+            injectTo: 'head-prepend',
+          },
+        ];
+      },
+    },
     react(),
     tailwindcss(),
     VitePWA({
@@ -49,9 +71,9 @@ export default defineConfig({
         ],
       },
       devOptions: {
-        // Enable the service worker during `npm run dev` so the PWA install
-        // prompt appears on localhost without needing a production build.
-        enabled: true,
+        // Keep the dev server free of service worker behavior so Vite's React
+        // refresh preamble is injected correctly and localhost stays usable.
+        enabled: false,
       },
       workbox: {
         // No precaching — don't serve anything cache-first from the app shell.

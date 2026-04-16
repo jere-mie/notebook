@@ -29,6 +29,7 @@ interface EditorProps {
   onBack: () => void;
   onToggleSidebar: () => void;
   onNavNote: (direction: 'up' | 'down') => void;
+  onMoveNote: (direction: 'up' | 'down') => void;
   onAddFiles: (noteId: string, files: NoteFile[]) => void;
   onRenameFile: (noteId: string, fileId: string, newName: string) => void;
   onDeleteFile: (noteId: string, fileId: string) => void;
@@ -52,7 +53,7 @@ function EmptyState() {
   );
 }
 
-export default function Editor({ note, focusRequestKey, theme, sidebarVisible, files, filesOpen, filesPanelWidth, onToggleFiles, onFilesPanelResizeStart, onUpdate, onDelete, onBack, onToggleSidebar, onNavNote, onAddFiles, onRenameFile, onDeleteFile }: EditorProps) {
+export default function Editor({ note, focusRequestKey, theme, sidebarVisible, files, filesOpen, filesPanelWidth, onToggleFiles, onFilesPanelResizeStart, onUpdate, onDelete, onBack, onToggleSidebar, onNavNote, onMoveNote, onAddFiles, onRenameFile, onDeleteFile }: EditorProps) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [markdownPreviewState, setMarkdownPreviewState] = useState<{ noteId: string | null; visible: boolean }>({
     noteId: null,
@@ -66,6 +67,8 @@ export default function Editor({ note, focusRequestKey, theme, sidebarVisible, f
   // Always-current ref so Monaco's onMount closure never goes stale
   const onNavNoteRef = useRef(onNavNote);
   useEffect(() => { onNavNoteRef.current = onNavNote; }, [onNavNote]);
+  const onMoveNoteRef = useRef(onMoveNote);
+  useEffect(() => { onMoveNoteRef.current = onMoveNote; }, [onMoveNote]);
 
   const isMarkdownDocument = !!note?.isCode && note.language === 'markdown';
   const markdownPreview = isMarkdownDocument && markdownPreviewState.noteId === note?.id && markdownPreviewState.visible;
@@ -87,6 +90,8 @@ export default function Editor({ note, focusRequestKey, theme, sidebarVisible, f
     };
     editor.addCommand(CtrlCmd | UpArrow, () => onNavNoteRef.current('up'));
     editor.addCommand(CtrlCmd | DownArrow, () => onNavNoteRef.current('down'));
+    editor.addCommand(CtrlCmd | Shift | UpArrow, () => onMoveNoteRef.current('up'));
+    editor.addCommand(CtrlCmd | Shift | DownArrow, () => onMoveNoteRef.current('down'));
     // Shift+Tab: focus title if at (1,1) with no selection; otherwise normal outdent
     editor.addCommand(Shift | Tab, () => {
       const pos = editor.getPosition();
@@ -342,15 +347,17 @@ export default function Editor({ note, focusRequestKey, theme, sidebarVisible, f
       ) : (
         /* Text mode: scrollable body with title + textarea */
         <div className="nb-editor-body">
-          <input
-            ref={titleRef}
-            type="text"
-            className="nb-title-input"
-            placeholder="Untitled"
-            value={note.title}
-            onChange={(e) => onUpdate(note.id, { title: e.target.value })}
-            aria-label="Note title"
-          />
+          <div className="nb-text-title-row">
+            <input
+              ref={titleRef}
+              type="text"
+              className="nb-title-input"
+              placeholder="Untitled"
+              value={note.title}
+              onChange={(e) => onUpdate(note.id, { title: e.target.value })}
+              aria-label="Note title"
+            />
+          </div>
           <textarea
             ref={textAreaRef}
             className="nb-text-area"

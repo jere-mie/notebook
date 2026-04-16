@@ -32,6 +32,7 @@ Source: [github.com/jere-mie/notebook](https://github.com/jere-mie/notebook)
 - Toggle attachments panel: `Cmd+Shift+F` on macOS, `Ctrl+Shift+F` on Windows/Linux
 - Close attachments panel / file preview: `Esc`
 - Previous / next note: `Cmd+Up` and `Cmd+Down` on macOS, `Ctrl+Up` and `Ctrl+Down` on Windows/Linux
+- Move note up / down: `Cmd+Shift+Up` and `Cmd+Shift+Down` on macOS, `Ctrl+Shift+Up` and `Ctrl+Shift+Down` on Windows/Linux
 
 ## Stack
 
@@ -65,7 +66,7 @@ npm run preview
 - Exports include file attachments; imports merge attachments by file ID (duplicates are skipped)
 - The attachments panel is resizable - drag its left edge to adjust width; the width is remembered across sessions
 - Imports support both the current structured JSON payload and a legacy plain note array
-- The PWA service worker is enabled in development so install behavior can be tested locally
+- The PWA service worker is only enabled in preview/production builds; `npm run dev` stays service-worker-free so Vite hot reload works correctly
 
 ## Author
 
