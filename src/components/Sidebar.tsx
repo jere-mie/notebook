@@ -580,7 +580,6 @@ export default function Sidebar({
                       ) : (
                         <span className="nb-folder-name">{folder.name}</span>
                       )}
-                      <span className="nb-folder-count">{folderNoteIds.length}</span>
                       <div className="nb-folder-actions" onClick={(e) => e.stopPropagation()}>
                         <button
                           className="nb-folder-action-btn"
@@ -624,6 +623,7 @@ export default function Sidebar({
                           )}
                         </button>
                       </div>
+                      <span className="nb-folder-count">{folderNoteIds.length}</span>
                     </div>
 
                     {/* Folder notes */}
